@@ -49,7 +49,6 @@ class RecordSerializer:
                 result[key] = value
         return result
                 
-
 schema = [
     ("id",    "int32"),
     ("name",  "string:20"),
