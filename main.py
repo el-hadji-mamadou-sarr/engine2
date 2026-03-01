@@ -1,5 +1,9 @@
 import struct
-from typing import Literal
+import os
+
+PAGE_SIZE = 4096
+HEADER_FORMAT = ">I H H" #8bytes
+HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
 class RecordSerializer:
     def __init__(self, schema: list[tuple[str, str]]):
@@ -47,22 +51,40 @@ class RecordSerializer:
                 result[key] = value
             else:
                 result[key] = value
-        return result
-                
-schema = [
-    ("id",    "int32"),
-    ("name",  "string:20"),
-    ("score", "float64"),
-    ("active","int32"),
-]
-
-s = RecordSerializer(schema)
-print(s.record_size) 
-
-data = s.pack({"id": 1, "name": "Alice", "score": 95.5, "active": 1})
-print(len(data))
-
-record = s.unpack(data)
-print(record)
+        return result              
     
+class Page:
+    def __init__(self, page_id: int, record_size: int, data: bytes = None):
+        self.page_id = page_id
+        self.record_size = record_size
+        self.capacity = (PAGE_SIZE - HEADER_SIZE) // record_size
+        self.dirty = False # page modified since last read
+        
+        if data is not None:
+            self._data = bytearray(data)
+            self._read_header()
+        else:
+            self._data = bytearray(PAGE_SIZE)
+            self.num_records = 0
+            self._write_header()
     
+    def _write_header(self):
+        header = struct.pack(HEADER_FORMAT, self.page_id, self.num_records, self.record_size)
+        self._data[:HEADER_SIZE] = header
+    
+    def _read_header(self):
+        page_id, num_records, record_size = struct.unpack(HEADER_FORMAT, bytes(self._data[:HEADER_SIZE]))
+        self.page_id = page_id
+        self.num_records = num_records
+        self.record_size = record_size
+        
+        self.capacity = (PAGE_SIZE - HEADER_SIZE) // record_size
+    
+    def _slot_offset(self, slot_id) -> int:
+        return HEADER_SIZE + (slot_id * self.record_size)
+    
+    def get(self, slot_id) -> bytes:
+        if slot_id >= self.num_records:
+            raise ValueError("Slot invalid")
+        offset = self._slot_offset(slot_id)
+        return bytes(self._data[offset:offset+self.record_size])
