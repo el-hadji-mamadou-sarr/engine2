@@ -15,3 +15,25 @@ Une DB doit stocker des champs de taille variable (ex: une adresse email qui peu
 Pourquoi SQLite et PostgreSQL ont-ils choisi big-endian pour leur format de fichier, alors que la plupart des CPU modernes sont little-endian ?
 - je ne sais pas
 
+
+# Day 3
+
+Une page fait 4096 bytes. Le header fait 8 bytes. Les records font 36 bytes chacun (ton schema du Cours 1). Combien de records maximum peut contenir cette page ? Montre le calcul.
+- free_space = 4096 - 8 = 4088 bytes
+ num_records_max = 4088//36 = 113 records
+
+Qu'est-ce que le flag dirty sur une page ? Pourquoi est-ce important de le tracker ?
+- il permet de marquer qu'une page a été modifiée avant la lecture. 
+- pour permettre d'update la page sur le disk
+
+Dans notre delete(), on écrase le record avec des zéros mais on ne décrémente pas num_records. Quel problème ça crée ? Comment le slotted page (avec les tombstones) résout ce problème mieux que notre implémentation actuelle ?
+- c'est de l'espace occupé sur le disk qu'on ne libére pas.
+- comme chaque slot a cette information sur l'offset et la longueur, lors de la suppression, on pourra enlever l'élément supprimé de la mémoire et update chaque slot.
+
+
+Pourquoi est-ce qu'une page est l'unité atomique de lecture/écriture, et pas le record individuel ? Qu'est-ce que ça implique si la machine crashe au milieu de l'écriture d'une page ?
+- Parce qu'on veux lire par bloc sur le disk, et que la durée de lecture sur le disk est imprtant. si la machine crashe, rien n'est mis en mémoire
+
+Le RID encode (page_id, slot_id). Si on décide de réorganiser les records dans une page (pour compacter l'espace après des suppressions), qu'est-ce qui se passe avec les RIDs existants ? Quel impact ça a sur les indexes ?
+- les slots de devront pas bouger donc même RIDs. les indexes stockent des RIDs donc pareil ils ne devront pas changer aprés une suppréssion. 
+
