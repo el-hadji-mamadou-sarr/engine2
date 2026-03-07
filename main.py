@@ -1,6 +1,8 @@
 import struct
 import os
 from dataclasses import dataclass
+from typing import Optional
+from collections import OrderedDict
 
 PAGE_SIZE = 4096
 HEADER_FORMAT = ">I H H" #8bytes
@@ -176,76 +178,172 @@ class RID:
         return f"RID({self.page_id}:{self.slot_id})"
         
 class HeapTable:
-    def __init__(self, filepath: str, schema: list[tuple[str, str]]):
+    def __init__(self, filepath: str, schema: list[tuple[str, str]], pool_size: int):
         self.schema = schema
         self.record_serializer = RecordSerializer(schema)
         self.disk_manager = DiskManager(filepath, self.record_serializer.record_size)
-        self.updated_data = None
+        self.pool = BufferPool(self.disk_manager, pool_size)
     
     def insert(self, record: dict) -> RID:
         data = self.record_serializer.pack(record)
         num_pages = self.disk_manager.num_pages()
         if num_pages == 0 :
-            page = self.disk_manager.allocate_page()
+            page = self.pool.new_page()
         else:
-            page = self.disk_manager.read_page(num_pages - 1)
+            page = self.pool.fetch_page(num_pages - 1)
             if page.is_full():
-                page = self.disk_manager.allocate_page()
+                self.pool.unpin_page(page.page_id, is_dirty=False)
+                page, _ = self.pool.new_page()
         
         slot_id = page.insert(data)
-        self.disk_manager.write_page(page)
+        self.pool.unpin_page(page.page_id, is_dirty=True)
         
         return RID(page.page_id, slot_id)
     
     def get(self, rid: RID) -> dict:
-        page = self.disk_manager.read_page(rid.page_id)
+        page = self.pool.fetch_page(rid.page_id)
         data = page.get(rid.slot_id)
-        record =  self.record_serializer.unpack(data)
+        self.pool.unpin_page(page.page_id, is_dirty=False)
+        return self.record_serializer.unpack(data)
         
-        if self.updated_data is not None:
-            return self.updated_data
-        
-        return record
-        
-    
     def update(self, rid: RID, record: dict):
-        page = self.disk_manager.read_page(rid.page_id)
-        current_record = self.record_serializer.unpack(page.get(rid.slot_id))
-        
-        updated_data = {}
-        for item in schema:
-            key, _ = item
-            if current_record[key] != record[key]:
-                updated_data[key] = record[key]
-        
-        if not updated_data:
-            return
-        
-        self.updated_data = updated_data
-        
+        page = self.pool.fetch_page(rid.page_id)
         data = self.record_serializer.pack(record)
         page.update(rid.slot_id, data)
-        self.disk_manager.write_page(page)
+        self.pool.unpin_page(rid.page_id, is_dirty=True)
     
-schema = [
-    ("id",    "int32"),
-    ("name",  "string:20"),
-    ("score", "float64"),
-    ("active","int32"),
-]
+    def scan(self) ->list[dict]:
+        page_nums = self.disk_manager.num_pages()
+        records = []
+        null_record = bytes(self.disk_manager.record_size)
+        for page_id in range(page_nums):
+            page = self.pool.fetch_page(page_id)
+            for slot_id in range(page.num_records):
+                data = page.get(slot_id)
+                if data == null_record:
+                    continue
+                record = self.record_serializer.unpack(data)
+                records.append(record)
+            self.pool.unpin_page(page_id, is_dirty=False)
+        return records
+                
 
-table = HeapTable("students.db", schema)
+@dataclass
+class FrameMeta:
+    page_id: Optional[int] = None #
+    pin_count: int = 0 # opération qui utilise cette page
+    dirty: bool = False
 
-rid1 = table.insert({"id": 1, "name": "Alice", "score": 95.5, "active": 1})
-rid2 = table.insert({"id": 2, "name": "Bob",   "score": 87.0, "active": 1})
+class BufferPool:
+    def __init__(self, disk_manager: DiskManager, pool_size: int = 10):
+        self.disk = disk_manager
+        self.pool_size = pool_size
+    
+        self.frames: list[Optional[object]] = [None] * pool_size
+        self.meta = list[FrameMeta] = [FrameMeta() for _ in range(pool_size)]
+        self.page_table = dict[int, int] = {}
+        self.lru = OrderedDict[int, bool] = OrderedDict() # pour la suppression
+        self.free_frames = list[int] = list(range(pool_size))
+    
+    def _get_free_frame(self) -> Optional[int]:
+        if self.free_frames:
+            return self.free_frames.pop()
+        
+        # s'il y'a rien dans lru => pas possible de supprimer ,tout est pinné
+        if not self.lru:
+            return None
+        
+        victim_frame = next(iter(self.lru))
+        del self.lru[victim_frame]
+        
+        victim_meta = self.meta[victim_frame]
+        
+        if victim_meta.dirty:
+            self.disk.write_page(self.frames[victim_frame])
+        
+        del self.page_table[victim_meta.page_id]
+        self.frames[victim_frame] = None
+        self.meta[victim_frame] = FrameMeta()
+        return victim_frame
+    
+    def fetch_page(self, page_id: int) -> Page:
+        # 1. get page from pool first
+        if page_id in self.page_table:
+            frame_id = self.page_table[page_id]
+            meta = self.meta[frame_id]
+            meta.pin_count+=1
+            if frame_id in self.lru:
+                del self.lru[frame_id]
+            page = self.frames[frame_id]
+            return page
 
-print(rid1)  # RID(0:0)
-print(rid2)  # RID(0:1)
+        frame_id = self._get_free_frame()
+        if frame_id is None:
+            raise MemoryError("Buffer full, no frame evictable")
+        
+        page = self.disk.read_page(page_id)
+        
+        self.frames[frame_id] = page
+        self.meta[frame_id] = FrameMeta(page_id=page_id, pin_count=1, dirty=False)
+        self.page_table[page_id] = frame_id
+        
+        return page                
+    
+    def unpin_page(self, page_id: int, is_dirty: bool = False):
+        if page_id not in self.page_table:
+            return
+        
+        frame_id = self.page_table[page_id]
+        meta = self.meta[frame_id]
+        
+        if meta.pin_count <=0:
+            return
 
-record = table.get(rid1)
-print(record)  # {"id": 1, "name": "Alice", "score": 95.5, "active": 1}
+        meta.pin_count -= 1
+        if is_dirty:
+            meta.dirty = True
+        
+        if meta.pin_count == 0:
+            self.lru[frame_id] = True
+    
+    def flush_page(self, page_id: int):
+        if page_id not in self.page_table:
+            return
+        
+        frame_id = self.page_table[page_id]
+        
+        meta = self.meta[frame_id]
+        if meta.dirty:
+            page = self.frames[frame_id]
+            self.disk.write_page(page)
+            meta.dirty = False
+    
+    def flush_all(self):
+        for page_id in list(self.page_table.keys()):
+            self.disk.write_page(page_id)
+    
+    def new_page(self):
+        
+        frame_id = self._get_free_frame()
+        
+        if not frame_id:
+            raise MemoryError("Buffer full")
+        
+        page = self.disk.allocate_page()
+        page_id = page.page_id
+        self.frames[frame_id] = page
+        self.meta[frame_id] = FrameMeta(page_id=page_id, pin_count=1, dirty=True)
+        self.page_table[page_id] = frame_id
+        
+        return page, page_id
+        
+        
+        
+        
+        
+                
 
-table.update(rid2, {"id": 2, "name": "Bob", "score": 99.0, "active": 1})
-print(table.get(rid2))  # score = 99.0
             
-    
+            
+            
+            
