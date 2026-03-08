@@ -37,3 +37,22 @@ Pourquoi est-ce qu'une page est l'unité atomique de lecture/écriture, et pas l
 Le RID encode (page_id, slot_id). Si on décide de réorganiser les records dans une page (pour compacter l'espace après des suppressions), qu'est-ce qui se passe avec les RIDs existants ? Quel impact ça a sur les indexes ?
 - les slots de devront pas bouger donc même RIDs. les indexes stockent des RIDs donc pareil ils ne devront pas changer aprés une suppréssion. 
 
+
+# day4:
+
+Le Buffer Pool a 4 frames. Les pages 1, 2, 3, 4 sont chargées dans cet ordre. Toutes ont pin_count = 0. On demande maintenant la page 5. Quelle page est évincée par LRU ? Pourquoi ?
+- la page 1 est évincée. parce que c'est la moins récemment utilisée.
+
+Qu'est-ce qu'un cache hit vs un cache miss ? Quel est l'impact en termes de performance ?
+- cache hit -> la valeur se trouve en RAM, et cache miss -> elle n'est pas dans la RAM, il faut donc aller le chercher dans le disk. 
+- sur la performance, l'accessibilité en RAM est plus rapide que celui du disk
+
+Pourquoi est-ce qu'on doit écrire une page dirty sur disque avant de l'évincer, et pas après ?
+- les modifications seront perdues
+
+LRU suppose que "récemment utilisé = probablement réutilisé bientôt". Donne un exemple concret où cette hypothèse est fausse dans le contexte d'une DB. (Hint: pense à un full table scan)
+- table scan => fetch per page_id => for each fetch -> unpin -> en terme de performance c'est pas génial. parce que chaque page fetch entraine un update pool, même si la page ne sera probablement pas réutilisé plutard.
+
+Dans notre implémentation, unpin_page prend un paramètre is_dirty. Pourquoi est-ce que c'est l'appelant qui décide si la page est dirty, plutôt que le Buffer Pool lui-même ?
+- le buffer pool n'a pas l'information si la page est modifiée ou pas. La séparation des concerns: son rôle est de cache la page et d'écrire sur disk si c'est dirty.
+
