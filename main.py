@@ -1,7 +1,7 @@
 import struct
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 from collections import OrderedDict
 from contextlib import contextmanager
 
@@ -366,41 +366,41 @@ class BufferPool:
         self.page_table[page_id] = frame_id
         
         return page, page_id
+
+class BPlusNode:
+    def __init__(self, is_leaf: bool = False):
+        self.keys: list[Any] = [Any]
+        self.is_leaf: bool = is_leaf
         
-
-schema = [
-    ("id",    "int32"),
-    ("name",  "string:20"),
-    ("score", "float64"),
-    ("active","int32"),
-]
-
-table = HeapTable("students.db", schema, pool_size=10)
-
-rid1 = table.insert({"id": 1, "name": "Alice", "score": 95.5, "active": 1})
-rid2 = table.insert({"id": 2, "name": "Bob",   "score": 87.0, "active": 1})
-rid3 = table.insert({"id": 3, "name": "Carol", "score": 92.0, "active": 0})
-
-_ = table.get(rid1)
-_ = table.get(rid1)  # 2ème accès → cache hit
-_ = table.get(rid2)
-
-table.update(rid3, {"id": 3, "name": "Carol", "score": 99.0, "active": 1})
-print(rid3)
-
-print(table.pool.stats())
-# {
-#   "pool_size": 10,
-#   "pages_in_pool": 1,
-#   "dirty_pages": 1,
-#   "pinned_pages": 0,
-#   "hit_rate": "X.X%"
-# }
-
-table.close()
+        # noeuds internes: list d'enfants (len = len(keys) + 1)
+        self.children = list[BPlusNode] = []
+        
+        # feuilles: list de valeurs (RIDs) +lien vers feuille suivante
+        self.values = list[Any] = []
+        self.next: Optional[BPlusNode] = None
                 
+    def is_full(self, order: int) -> bool:
+        return len(self.keys) >= 2 * order -1
+    
+    def __repr__(self):
+        return f"{'Leaf' if self.is_leaf else 'Node'}{self.keys}"
+            
+            
+class BPlusTree:
+    def __init__(self, order = 3):
+        """ order = 3 => entre 2 et 5 clés"""     
+        self.order = order
+        self.root = BPlusNode(is_leaf=True)
 
-            
-            
-            
-            
+    def _split_child(self, parent: BPlusNode, i: int):
+        """split l'enfant i du parent"""
+        
+        
+    
+    def insert(self, key: Any, value: Any):
+        if self.root.is_full(self.order):
+            old_root = self.root
+            new_root = BPlusNode(is_leaf=False)
+            new_root.children.append(old_root)
+            self._split_child(new_root, 0)
+            self.root = new_root
