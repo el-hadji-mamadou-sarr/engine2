@@ -369,23 +369,23 @@ class BufferPool:
 
 class BPlusNode:
     def __init__(self, is_leaf: bool = False):
-        self.keys: list[Any] = [Any]
+        self.keys: list[Any] = []
         self.is_leaf: bool = is_leaf
         
         # noeuds internes: list d'enfants (len = len(keys) + 1)
-        self.children = list[BPlusNode] = []
+        self.children: list[BPlusNode] = []
         
         # feuilles: list de valeurs (RIDs) +lien vers feuille suivante
-        self.values = list[Any] = []
+        self.values: list[Any] = []
         self.next: Optional[BPlusNode] = None
                 
     def is_full(self, order: int) -> bool:
-        return len(self.keys) >= 2 * order -1
+        return len(self.keys) >= 2 * order - 1
     
     def __repr__(self):
         return f"{'Leaf' if self.is_leaf else 'Node'}{self.keys}"
             
-            
+
 class BPlusTree:
     def __init__(self, order = 3):
         """ order = 3 => entre 2 et 5 clés"""     
@@ -394,13 +394,18 @@ class BPlusTree:
 
     def _split_child(self, parent: BPlusNode, i: int):
         """split l'enfant i du parent"""
+        pass
         
+    def _insert_non_full(self, node: BPlusNode, key: Any, value: Any):
+        if node.is_leaf:
+            i = 0
+            while i<len(node.keys) and key > node.keys[i]:
+                i+=1
+            node.keys.insert(i, key)
+            node.values.insert(i, value)
+        else:
+            i =len
+            
         
-    
     def insert(self, key: Any, value: Any):
-        if self.root.is_full(self.order):
-            old_root = self.root
-            new_root = BPlusNode(is_leaf=False)
-            new_root.children.append(old_root)
-            self._split_child(new_root, 0)
-            self.root = new_root
+        pass
