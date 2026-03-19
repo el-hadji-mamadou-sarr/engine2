@@ -392,20 +392,49 @@ class BPlusTree:
         self.order = order
         self.root = BPlusNode(is_leaf=True)
 
-    def _split_child(self, parent: BPlusNode, i: int):
-        """split l'enfant i du parent"""
-        pass
+    def _find_leaf(self, key):
+        node = self.root
         
-    def _insert_non_full(self, node: BPlusNode, key: Any, value: Any):
-        if node.is_leaf:
-            i = 0
-            while i<len(node.keys) and key > node.keys[i]:
-                i+=1
-            node.keys.insert(i, key)
-            node.values.insert(i, value)
-        else:
-            i =len
+        i = 0
+        while not node.is_leaf:
             
+            while i < len(node.keys) and key > node.keys[i]:
+                i+=1
+            
+            node = node.children[i]
+
+        return node
+    
+    def search(self, key):
+        leaf = self._find_leaf(key)
         
-    def insert(self, key: Any, value: Any):
-        pass
+        for i, k in enumerate(leaf.keys):
+            if k == key:
+                return leaf.values[i]
+        
+        return None
+        
+            
+    def _insert_in_leaf(self, leaf, key, value):
+        i = 0
+        while key < len(leaf.keys) and key > leaf.keys[i]:
+            i+=1
+        
+        leaf.keys.insert(i, key)
+        leaf.values.insert(i, value)
+        
+    def _split_leaf(self, parent, i):
+        # split la feuille du parent children[i]
+        old = parent.children[i]
+        new = BPlusNode(is_leaf=True)
+        mid = len(old.keys) // 2
+        new.keys = old.keys[mid:]
+        new.values = old.values[mid:]
+        old.keys = old.keys[:mid]
+        old.values = old.values[:mid]
+        new.next = old.next
+        old.next = new
+        
+        parent.keys.insert(i, new.keys[i])
+        parent.children.insert(i+1, new)
+            

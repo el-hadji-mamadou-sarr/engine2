@@ -29,38 +29,54 @@ class BplusTree:
             print(next.keys)
             next = next.next
 
+    def split_child(self, parent: Node, i: int):
+        """split l'enfant i du parent"""
+        child = parent.children[i]
+        # new new node is on the right side
+        new_node =Node(is_leaf=child.is_leaf)
+        if child.is_leaf:
+            i_median = t - 1
+            new_node.keys=child.keys[i_median:]
+            child.keys = child.keys[:i_median]
+            new_node.next = child.next
+            child.next = new_node
+            
+            # faire remonter la clé du milieu
+            mid_key = new_node.keys[0]
         
-    def insert(self, key: int):
-        if self.root.is_leaf:
-            if not self.root.is_full():
-                if not self.root.keys:
-                    self.root.keys.append(key) 
+        parent.keys.insert(i, mid_key)
+        
+    def insert(self, node: Node, key: int):
+        if node.is_leaf:
+            if not node.is_full():
+                if not node.keys:
+                    node.keys.append(key) 
                 else:
                     i = 0
-                    while i < len(self.root.keys):
-                        if self.root.keys[i] > key:
+                    while i < len(node.keys):
+                        if node.keys[i] > key:
                             break
                         i+=1
-                    self.root.keys.insert(i, key)
+                    node.keys.insert(i, key)
             else:
                 i_median = t - 1
-                self.root.is_leaf = False
+                node.is_leaf = False
                 new_node_left = Node(is_leaf=True)
                 new_node_right = Node(is_leaf=True)
                 
-                new_node_left.keys=self.root.keys[:i_median]
+                new_node_left.keys=node.keys[:i_median]
                 new_node_left.next = new_node_right
                 
-                new_node_right.keys = self.root.keys[i_median:]
+                new_node_right.keys = node.keys[i_median:]
                 
-                self.root.children.append(new_node_left)
-                self.root.children.append(new_node_right)
+                node.children.append(new_node_left)
+                node.children.append(new_node_right)
                 
-                self.root.keys = [self.root.keys[i_median]]
+                node.keys = [node.keys[i_median]]
 
         else:
             pass
-        
+
 
 tree = BplusTree()
 
