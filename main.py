@@ -398,7 +398,7 @@ class BPlusTree:
         i = 0
         while not node.is_leaf:
             
-            while i < len(node.keys) and key > node.keys[i]:
+            while i < len(node.keys) and key >= node.keys[i]:
                 i+=1
             
             node = node.children[i]
@@ -424,7 +424,7 @@ class BPlusTree:
         leaf.values.insert(i, value)
         
     def _split_leaf(self, parent, i):
-        # split la feuille du parent children[i]
+        # split la feuille du parent children[i], la médiane reste et remonte
         old = parent.children[i]
         new = BPlusNode(is_leaf=True)
         mid = len(old.keys) // 2
@@ -435,6 +435,97 @@ class BPlusTree:
         new.next = old.next
         old.next = new
         
-        parent.keys.insert(i, new.keys[i])
+        parent.keys.insert(i, new.keys[0])
         parent.children.insert(i+1, new)
+    
+    def _split_internal(self, parent, i):
+        """la médiane remonte et disparait"""
+        old = parent.children[i]
+        mid = len(old.keys) // 2
+        mid_key = old.key[mid]
+        
+        new = BPlusNode(is_leaf=False)
+        new.keys = old.keys[mid+1:]
+        new.children = old.children[mid+1:]
+        old.keys = old.keys[:mid]
+        old.children = old.children[:mid+1] # le children mid part à droite parce à gauche, on a les clés supérieurs mid_key
+        
+        parent.keys.insert(i, mid_key)
+        parent.children.insert(i+1, new)
+        
+        
+    def _split_child(self, parent, i):
+        child = parent.children[i]
+        if child.is_leaf:
+            self._split_leaf(parent, i)
+        else:
+            self._split_internal(parent, i)
+    
+    def _insert_recursive(self, node, key, value):
+        if node.is_leaf:
+            self._insert_in_leaf(node, key, value)
+            return
+
+        # on cherche le bon enfant
+        i = 0
+        while i < len(node.keys) and key >= node.keys[i]:
+            i+=1
+        
+        # si l'enfant est plein, split avant de descendre
+        
+        if node.children[i].is_full(self.order):
+            self._split_child(node, i)
+            if key >= node.keys[i]:
+                i+=1
+        
+        self._insert_recursive(node.children[i], key, value)
+        
+        
+    def insert(self, key, value):
+        if self.root.is_full(self.order):
+            old_root = self.root
+            new_root = BPlusNode(is_leaf=False)
+            new_root.children.append(old_root)
+            self._split_child(new_root, 0)
             
+            self.root = new_root
+        
+        self._insert_recursive(self.root, key, value)
+    
+    def search(self, key):
+        leaf = self._find_leaf(key)
+        
+        for i, item in enumerate(leaf.keys):
+            if item == key:
+                return leaf.values[i]
+        
+        return None
+        
+    def range_search(self, start, end):
+        results = []
+        
+        leaf = self._find_leaf(start)
+        
+        while leaf is not None:
+            for i, k in enumerate(leaf.keys):
+                if k > end:
+                    return results
+                if k >= start:
+                    results.append((k, leaf.values[i]))
+            leaf = leaf.next
+        return results 
+    
+    def print_tree(self, node=None, level=0):
+        if node is None:
+            node = self.root
+        
+        print(" "*level + repr(node.keys) + (" [leaf]" if node.is_leaf else ""))
+        for child in node.children:
+            self.print_tree(child, level+1)
+
+tree = BPlusTree(order=2)
+
+for k in [5, 10, 15, 20, 25, 30]:
+    tree.insert(k, f"rid_{k}")
+
+tree.print_tree()
