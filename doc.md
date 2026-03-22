@@ -56,3 +56,36 @@ LRU suppose que "récemment utilisé = probablement réutilisé bientôt". Donne
 Dans notre implémentation, unpin_page prend un paramètre is_dirty. Pourquoi est-ce que c'est l'appelant qui décide si la page est dirty, plutôt que le Buffer Pool lui-même ?
 - le buffer pool n'a pas l'information si la page est modifiée ou pas. La séparation des concerns: son rôle est de cache la page et d'écrire sur disk si c'est dirty.
 
+# day5:
+
+Avec order=2 (max_keys=4), insère à la main les clés [3, 7, 1, 5, 9, 2] une par une. Dessine l'arbre après chaque insertion qui provoque un split. (Pas de code, juste le dessin)
+insert 3:
+[3]
+insert 7
+[3 | 7]
+insert 1
+[1 | 3 | 7]
+insert 5
+     [3]
+[1]       [5 | 7]
+insert 9
+     [3]
+[1]       [5 | 7 | 9]
+insert 2
+         [3]
+[1 | 2]       [5 | 7 | 9]
+
+Quelle est la différence entre _split_leaf et _split_internal ? Pourquoi la médiane se comporte-t-elle différemment dans les deux cas ?
+dans split leaf, la médiane remonte et reste dans la feuille alors que pour split interval , la médiane remonte et disparait de la feuille
+
+Dans _insert_recursive, on split l'enfant avant de descendre dedans. Pourquoi cette approche "split en descendant" plutôt que "split en remontant" ?
+la prochaine insertion va splitter les nodes plus en haut de l'arbre.
+
+Le range_search est O(log n + k) où k est le nombre de résultats. Explique d'où vient chaque terme.
+log n pour la recherche de la feuille c'est à la descente sur l'arbre et le k pour traverser la liste chainée
+
+Actuellement, si on insère deux fois la même clé, que se passe-t-il ? Est-ce un bug ou un comportement acceptable selon le use case ?
+C'est pas un bug si on insére la même clé, c'est plus les valeurs sur ces clés qui comptent.
+C'est un bug c'est sur, puisque lors d'un delete, on peux supprimer une clé par erreur. Pour la base de donnée les valeurs à ces clés sont des rids donc supprimer la mauvaise clé revient donc à supprimer un de l'arbre.
+Pour une use case ou l'insertion et la range query sont les 2 seuls use case, on peux considérer qu'on pourrais avoir des clés similaires.
+

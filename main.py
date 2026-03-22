@@ -378,6 +378,7 @@ class BPlusNode:
         # feuilles: list de valeurs (RIDs) +lien vers feuille suivante
         self.values: list[Any] = []
         self.next: Optional[BPlusNode] = None
+        self.doublon: Optional[BPlusNode] = None
                 
     def is_full(self, order: int) -> bool:
         return len(self.keys) >= 2 * order - 1
@@ -405,19 +406,33 @@ class BPlusTree:
 
         return node
     
+    def _find_leafs(self, key):
+        """also find doublon"""
+        node = self.root
+        
+        i = 0
+        while not node.is_leaf:
+            
+            while i < len(node.keys) and key >= node.keys[i]:
+                i+=1
+            
+            node = node.children[i]
+
+        return node
+    
+    
     def search(self, key):
         leaf = self._find_leaf(key)
-        
+        results = []
         for i, k in enumerate(leaf.keys):
             if k == key:
-                return leaf.values[i]
-        
-        return None
+                results.append(leaf.values[i])
+        return results
         
             
     def _insert_in_leaf(self, leaf, key, value):
         i = 0
-        while key < len(leaf.keys) and key > leaf.keys[i]:
+        while i < len(leaf.keys) and key > leaf.keys[i]:
             i+=1
         
         leaf.keys.insert(i, key)
@@ -440,9 +455,9 @@ class BPlusTree:
     
     def _split_internal(self, parent, i):
         """la médiane remonte et disparait"""
-        old = parent.children[i]
+        old = parent.children[i]                         
         mid = len(old.keys) // 2
-        mid_key = old.key[mid]
+        mid_key = old.keys[mid]
         
         new = BPlusNode(is_leaf=False)
         new.keys = old.keys[mid+1:]
@@ -454,14 +469,19 @@ class BPlusTree:
         parent.children.insert(i+1, new)
         
         
-    def _split_child(self, parent, i):
+    def _split_child(self, parent, i, verbose=False):
+        if verbose:
+            self.print_tree(label="BEFORE")
         child = parent.children[i]
         if child.is_leaf:
             self._split_leaf(parent, i)
         else:
             self._split_internal(parent, i)
+        
+        if verbose:
+            self.print_tree(label="AFTER")
     
-    def _insert_recursive(self, node, key, value):
+    def _insert_recursive(self, node, key, value, verbose):
         if node.is_leaf:
             self._insert_in_leaf(node, key, value)
             return
@@ -474,23 +494,27 @@ class BPlusTree:
         # si l'enfant est plein, split avant de descendre
         
         if node.children[i].is_full(self.order):
-            self._split_child(node, i)
+            self._split_child(node, i, verbose)
             if key >= node.keys[i]:
                 i+=1
         
-        self._insert_recursive(node.children[i], key, value)
+        self._insert_recursive(node.children[i], key, value, verbose)
         
         
-    def insert(self, key, value):
+    def insert(self, key, value, verbose=False):
         if self.root.is_full(self.order):
+            if verbose:
+                self.print_tree(label="BEFORE")
             old_root = self.root
             new_root = BPlusNode(is_leaf=False)
             new_root.children.append(old_root)
             self._split_child(new_root, 0)
             
             self.root = new_root
+            if verbose:
+                self.print_tree(label="AFTER")
         
-        self._insert_recursive(self.root, key, value)
+        self._insert_recursive(self.root, key, value, verbose)
     
     def search(self, key):
         leaf = self._find_leaf(key)
@@ -515,7 +539,14 @@ class BPlusTree:
             leaf = leaf.next
         return results 
     
-    def print_tree(self, node=None, level=0):
+    def insert_verbose(self, key, value):
+        print(f"\nInserting: {key}")
+        self.insert(key, value, True)
+
+    def print_tree(self, node=None, level=0, label=None):
+        if label:
+            print("#"*5 + label + "#"*5)
+            
         if node is None:
             node = self.root
         
@@ -523,9 +554,20 @@ class BPlusTree:
         for child in node.children:
             self.print_tree(child, level+1)
 
+class Index:
+    def __init__(self):
+        self.tree = BPlusTree(order=2)
+        
+    def add(self, key, rid: RID):
+        self.tree.insert(key, rid)
+
+    def lookup(self, key):
+        values = self.tree.search(key)
+
 tree = BPlusTree(order=2)
 
-for k in [5, 10, 15, 20, 25, 30]:
-    tree.insert(k, f"rid_{k}")
+for k in [20, 10, 15, 25, 20, 6, 7, 40, 90, 55, 20]:
+    tree.insert(k, f"v{k}")
 
 tree.print_tree()
+
