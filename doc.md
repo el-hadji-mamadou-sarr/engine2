@@ -67,19 +67,20 @@ insert 1
 [1 | 3 | 7]
 insert 5
      [3]
-[1]       [5 | 7]
+[1]       [3 | 5 | 7]
 insert 9
-     [3]
-[1]       [5 | 7 | 9]
+     [3 | 5]
+[1]       [3]  [5 | 7 | 9]
 insert 2
-         [3]
-[1 | 2]       [5 | 7 | 9]
+     [3 | 5]
+[1 | 2]       [3]  [5 | 7 | 9]
 
 Quelle est la différence entre _split_leaf et _split_internal ? Pourquoi la médiane se comporte-t-elle différemment dans les deux cas ?
-dans split leaf, la médiane remonte et reste dans la feuille alors que pour split interval , la médiane remonte et disparait de la feuille
+dans split leaf, la médiane remonte et reste dans la feuille alors que pour split interval , la médiane remonte et disparait de la feuille. La leaf garde la donnée 
+et les noeuds internes permettent de naviger jusqu'à la racine.
 
 Dans _insert_recursive, on split l'enfant avant de descendre dedans. Pourquoi cette approche "split en descendant" plutôt que "split en remontant" ?
-la prochaine insertion va splitter les nodes plus en haut de l'arbre.
+splitter en remontant nécessite d'aller jusq'à la feuille, faire l'insertion et si la feuille est pleinne, il splitter et remontant jusqu'au root. donc il faudrait tracker tout le chemin parcouru. splitter en descendant permet d'être sur que le parent a de l'espace pour acceuillir une nouvelle clé.
 
 Le range_search est O(log n + k) où k est le nombre de résultats. Explique d'où vient chaque terme.
 log n pour la recherche de la feuille c'est à la descente sur l'arbre et le k pour traverser la liste chainée

@@ -398,40 +398,23 @@ class BPlusTree:
         
         while not node.is_leaf:
             i = 0
-            while i < len(node.keys) and key >= node.keys[i]:
+            while i < len(node.keys) and key > node.keys[i]:
                 i+=1
             
             node = node.children[i]
 
         return node
     
-    def _find_first_leaf(self, key):
-        node = self.root
-        
-        
-        while not node.is_leaf:
-            
-            i = 0
-            while i < len(node.keys) and key >= node.keys[i]:
-                print(i)
-                child = node.children[i]
-                if key in child.keys:
-                    print("key in child")
-                    break
-                i+=1
-            
-            node = node.children[i] 
-        return node
-    
-    
     def search(self, key):
-        leaf = self._find_first_leaf(key)
+        leaf = self._find_leaf(key)
         results = []
         
-        while leaf is not None and key in leaf.keys:
+        while leaf is not None:
             for i, k in enumerate(leaf.keys):
                 if k == key:
                     results.append(leaf.values[i])
+                elif k > key:
+                    return results
             leaf = leaf.next
         return results
         
@@ -525,7 +508,7 @@ class BPlusTree:
     def range_search(self, start, end):
         results = []
         
-        leaf = self._find_first_leaf(start)
+        leaf = self._find_leaf(start)
         
         while leaf is not None:
             for i, k in enumerate(leaf.keys):
@@ -567,11 +550,10 @@ class Index:
     def show_tree(self):
         self.tree.print_tree()
 
-idx = Index()
-idx.add(95.5, RID(0, 0))  # Alice
-idx.add(87.0, RID(0, 1))  # Bob
-idx.add(95.5, RID(0, 2))  # Carol — même score qu'Alice
+tree = BPlusTree(order=2)
+for k in [3, 7, 1, 5, 9, 2]:
+    tree.insert(k, f"v{k}")
 
-idx.show_tree()
-print(idx.lookup(95.5))  
-print(idx.range_lookup(85, 96))
+tree.print_tree()
+
+print(tree.search(20))
