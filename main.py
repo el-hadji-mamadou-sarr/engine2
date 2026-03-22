@@ -1,7 +1,7 @@
 import struct
 import os
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Optional, Any, List
 from collections import OrderedDict
 from contextlib import contextmanager
 
@@ -396,9 +396,8 @@ class BPlusTree:
     def _find_leaf(self, key):
         node = self.root
         
-        i = 0
         while not node.is_leaf:
-            
+            i = 0
             while i < len(node.keys) and key >= node.keys[i]:
                 i+=1
             
@@ -406,27 +405,34 @@ class BPlusTree:
 
         return node
     
-    def _find_leafs(self, key):
-        """also find doublon"""
+    def _find_first_leaf(self, key):
         node = self.root
         
-        i = 0
+        
         while not node.is_leaf:
             
+            i = 0
             while i < len(node.keys) and key >= node.keys[i]:
+                print(i)
+                child = node.children[i]
+                if key in child.keys:
+                    print("key in child")
+                    break
                 i+=1
             
-            node = node.children[i]
-
+            node = node.children[i] 
         return node
     
     
     def search(self, key):
-        leaf = self._find_leaf(key)
+        leaf = self._find_first_leaf(key)
         results = []
-        for i, k in enumerate(leaf.keys):
-            if k == key:
-                results.append(leaf.values[i])
+        
+        while leaf is not None and key in leaf.keys:
+            for i, k in enumerate(leaf.keys):
+                if k == key:
+                    results.append(leaf.values[i])
+            leaf = leaf.next
         return results
         
             
@@ -449,7 +455,7 @@ class BPlusTree:
         old.values = old.values[:mid]
         new.next = old.next
         old.next = new
-        
+
         parent.keys.insert(i, new.keys[0])
         parent.children.insert(i+1, new)
     
@@ -515,20 +521,11 @@ class BPlusTree:
                 self.print_tree(label="AFTER")
         
         self._insert_recursive(self.root, key, value, verbose)
-    
-    def search(self, key):
-        leaf = self._find_leaf(key)
-        
-        for i, item in enumerate(leaf.keys):
-            if item == key:
-                return leaf.values[i]
-        
-        return None
         
     def range_search(self, start, end):
         results = []
         
-        leaf = self._find_leaf(start)
+        leaf = self._find_first_leaf(start)
         
         while leaf is not None:
             for i, k in enumerate(leaf.keys):
@@ -550,7 +547,7 @@ class BPlusTree:
         if node is None:
             node = self.root
         
-        print(" "*level + repr(node.keys) + (" [leaf]" if node.is_leaf else ""))
+        print("    "*level + repr(node.keys) + (" [leaf]" + repr(node.values) if node.is_leaf else ""))
         for child in node.children:
             self.print_tree(child, level+1)
 
@@ -561,13 +558,20 @@ class Index:
     def add(self, key, rid: RID):
         self.tree.insert(key, rid)
 
-    def lookup(self, key):
-        values = self.tree.search(key)
+    def lookup(self, key)-> list[RID]:
+        return self.tree.search(key)
+    
+    def range_lookup(self, start, end)-> list[RID]:
+        return self.tree.range_search(start, end)
+    
+    def show_tree(self):
+        self.tree.print_tree()
 
-tree = BPlusTree(order=2)
+idx = Index()
+idx.add(95.5, RID(0, 0))  # Alice
+idx.add(87.0, RID(0, 1))  # Bob
+idx.add(95.5, RID(0, 2))  # Carol — même score qu'Alice
 
-for k in [20, 10, 15, 25, 20, 6, 7, 40, 90, 55, 20]:
-    tree.insert(k, f"v{k}")
-
-tree.print_tree()
-
+idx.show_tree()
+print(idx.lookup(95.5))  
+print(idx.range_lookup(85, 96))
