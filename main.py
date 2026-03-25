@@ -523,6 +523,60 @@ class BPlusTree:
         print(f"\nInserting: {key}")
         self.insert(key, value, True)
 
+    def _delete_recursive(self, node, key) -> bool:
+        if node.is_leaf:
+            if key not in node.keys:
+                return False
+        
+            i = node.keys.index(key)
+            node.keys.pop(i)
+            node.values.pop(i)
+            return True
+
+        i = 0
+        while i < len(node.keys) and key > node.keys[i]:
+            i+=1
+        
+        deleted = self._delete_recursive(node.children[i], key)
+        
+        if not deleted:
+            return False
+
+        child = node.children[i]
+        if len(child.keys) < self.order - 1:
+            self._fix_underflow(node, i)
+        
+        return True
+    
+    def _fix_underflow(self, parent, i):
+        left = parent.children[i - 1] if i > 0 else None
+        right = parent.children[i + 1] if i < len(parent.children) - 1 else None
+        
+        if left and len(left.keys) >= self.order:
+            self._rotate_right(parent, i)
+        elif right and len(right.keys) >= self.order:
+            self._rotate_left(parent, i)
+        
+        else:
+            if left:
+                self._merge(parent, i - 1)
+            else:
+                self._merge(parent, i)
+            
+    def rotate_right(self, parent, i):
+        child = parent.children[i]
+        left = parent.children[i-1]
+        
+        if child.is_leaf:
+            child.keys.insert(0, left.keys.pop())
+            child.values.insert(0, left.values.pop())
+            parent.keys[i-1] = child.keys[0]
+        
+        else:
+            child.keys.insert(0, parent.keys[i-1])
+            child.children.insert(0, left.children.pop())
+            parent.keys[i-1] = left.keys.pop()
+    
     def print_tree(self, node=None, level=0, label=None):
         if label:
             print("#"*5 + label + "#"*5)
